@@ -1,0 +1,95 @@
+#!/bin/sh
+
+DAEMONSTATE_active=1
+DAEMONSTATE_inactive=0
+
+SAVE_DIR=$HOME/.inotifaction
+SAVE_LOGS_DIR=$SAVE_DIR/log
+SAVE_PID_DIR=$SAVE_DIR/pid
+
+CONFIG_DIR=$HOME/.config/inotifaction/config
+SCRIPT=./scripts/relocator
+
+WATCH=$HOME/Pictures/screenshots
+
+run() {
+    inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
+    echo $?
+}
+
+start() {
+    exitIfDaemonIs $DAEMONSTATE_active
+
+    if [ ! -d "$SAVE_DIR" ]; then
+        echo "Missing directory ${SAVE_DIR}"
+        echo "Try 'mkdir ${SAVE_DIR}' (with root permission) or run the install file" 
+        exit 1
+    fi
+    echo "Starting daemon"
+    echo "Spawning inotifywait childs"
+    run
+    echo "Ok"
+}
+
+stop() {
+    exitIfDaemonIs $DAEMONSTATE_inactive
+
+    # This is safe because either the pid is taken by the inotifaction daemon
+    # or by nothing since the only unsafe case would be:
+    #
+    # The pid correspond to the inotifaction daemon, then its killed, then
+    # another program take that pid which is impossible since pids are
+    # incremental so the system would need a restart thus killing that script.
+    # So that unsafe case isn't possible.
+    #
+    # We are safe :)
+
+    daemon_pid=$(cat $SAVE_PID_DIR)
+    kill $daemon_pid 
+}
+
+exitIfDaemonIs() {
+    isDaemonActive
+    if [ $? = $1 ]; then
+        status
+        exit 0
+    fi
+}
+
+isDaemonActive() {
+    daemon_pid=$(cat $SAVE_PID_DIR)
+    daemon_pid_name=$(ps -p $daemon_pid -o comm=) 
+    if [ "$DAEMON_PID_NAME" = "$0" ]; then
+        return $DAEMONSTATE_active
+    else
+        return $DAEMONSTATE_inactive
+    fi
+}
+
+status() {
+    isDaemonActive
+    case $? in
+        $DAEMONSTATE_active)    echo "Active"   ;;
+        $DAEMONSTATE_inactive)  echo "Inactive" ;;
+    esac
+}
+
+case "${1}" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: ${0} {start|stop|restart|status}"
+        exit 1
+esac
+

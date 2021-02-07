@@ -1,0 +1,19 @@
+#!/bin/sh
+
+SAVE_DIR=$HOME/.relocator 
+SAVE_LOG_FILE=$SAVE_DIR/relocator.log
+SAVE_PID_FILE=$SAVE_DIR/relocator.pid
+SAVE_BIN_DIR=$HOME/.local/bin
+
+CONFIG_DIR=$HOME/.config/relocator
+
+rm -r .git
+chmod u+x relocator relocator_daemon
+mv relocator ${SAVE_BIN_DIR}
+mv relocator_daemon ${SAVE_BIN_DIR}
+mv ${PWD} ${SAVE_DIR}
+touch ${SAVE_LOG_FILE}
+touch ${SAVE_PID_FILE}
+
+mkdir ${CONFIG_DIR}
+touch ${CONFIG_DIR}/config
