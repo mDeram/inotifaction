@@ -1,5 +1,7 @@
 #!/bin/sh
 
+DAEMON_NAME="inotifactiond"
+
 DAEMONSTATE_active=1
 DAEMONSTATE_inactive=0
 
@@ -21,7 +23,11 @@ daemonize() {
 }
 
 start() {
-    exitIfDaemonIs $DAEMONSTATE_active
+    getDaemonStatus
+    if [ "$?" = "$DAEMONSTATE_active" ]; then
+        echo "Currently active"
+        return 1
+    fi
 
     echo "Checking if the save directory exists"
     mkdir -p -- "$SAVE_DIR"
@@ -31,9 +37,10 @@ start() {
         exit 1
     fi
     echo "Ok"
+
     echo "Starting inotifaction daemon"
     daemonize
-    echo "Ok"
+    echo "Daemon started"
 }
 
 stop() {
@@ -48,31 +55,29 @@ stop() {
     # We are safe :)
 
     # Getting the pid before make sure the pid is not changed after calling
-    # isDaemonActive, thus making this program able to kill other process
+    # getDaemonStatus, thus preventing this program to kill other process
     daemon_pid=$(cat $SAVE_PID_DIR)
-    exitIfDaemonIs $DAEMONSTATE_inactive $daemon_pid
-    kill $daemon_pid 
-}
-
-# Can be called as:
-# exitIfDaemonIs DAEMONSTATE
-# exitIfDaemonIs DAEMONSTATE pid
-exitIfDaemonIs() {
-    daemon_pid="${2:-$(cat $SAVE_PID_DIR)}"
-    isDaemonActive $daemon_pid
-    if [ $? = $1 ]; then
-        status
-        exit 0
+    getDaemonStatus $daemon_pid
+    if [ "$?" = "$DAEMONSTATE_inactive" ]; then
+        echo "Currently inactive"
+        return 1
     fi
+    kill $daemon_pid 
+    echo "Daemon killed"
 }
 
-# Can be called as:
-# isDaemonActive
-# isDaemonActive pid
-isDaemonActive() {
+# getDaemonStatus [pid]
+getDaemonStatus() {
+    # Get the pid from params or from the pid file
     daemon_pid="${1:-$(cat $SAVE_PID_DIR)}"
+    # Check pid not empty
+    if [ "$daemon_pid" = "" ]; then
+        return $DAEMONSTATE_inactive
+    fi
+
     daemon_pid_name=$(ps -p $daemon_pid -o comm=) 
-    if [ "$DAEMON_PID_NAME" = "$0" ]; then
+    #if [ "$daemon_pid_name" = "$0" ]; then
+    if [ "$daemon_pid_name" = "$DAEMON_NAME" ]; then
         return $DAEMONSTATE_active
     else
         return $DAEMONSTATE_inactive
@@ -80,7 +85,7 @@ isDaemonActive() {
 }
 
 status() {
-    isDaemonActive
+    getDaemonStatus
     case $? in
         $DAEMONSTATE_active)    echo "Active"   ;;
         $DAEMONSTATE_inactive)  echo "Inactive" ;;
@@ -93,6 +98,7 @@ if [ "$1" = "DAEMON" ]; then
     
     ### Daemonized section ###
     inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
+    wait
     ### End of daemonized section ###
 
     exit 0
