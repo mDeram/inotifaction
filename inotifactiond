@@ -4,36 +4,39 @@ DAEMONSTATE_active=1
 DAEMONSTATE_inactive=0
 
 SAVE_DIR=$HOME/.inotifaction
-SAVE_LOGS_DIR=$SAVE_DIR/log
+SAVE_LOG_DIR=$SAVE_DIR/log
 SAVE_PID_DIR=$SAVE_DIR/pid
+SAVE_ERR_DIR=$SAVE_DIR/err # or /dev/null
 
 CONFIG_DIR=$HOME/.config/inotifaction/config
 SCRIPT=./scripts/relocator
 
 WATCH=$HOME/Pictures/screenshots
 
-run() {
-    inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
-    echo $?
+daemonize() {
+    export PATH=$PWD:$PATH
+    cd /
+    #umask 022 do we want a umask here ? I don't think so
+    nohup setsid $0 DAEMON $* 2>$SAVE_ERR_DIR >$SAVE_LOG_DIR & jobs -p > $SAVE_PID_DIR
 }
 
 start() {
     exitIfDaemonIs $DAEMONSTATE_active
 
+    echo "Checking if the save directory exists"
+    mkdir -p -- "$SAVE_DIR"
     if [ ! -d "$SAVE_DIR" ]; then
-        echo "Missing directory ${SAVE_DIR}"
-        echo "Try 'mkdir ${SAVE_DIR}' (with root permission) or run the install file" 
+        echo "Missing directory ${SAVE_DIR} & cannot be created"
+        echo "Try 'mkdir ${SAVE_DIR}' or run the install file" 
         exit 1
     fi
-    echo "Starting daemon"
-    echo "Spawning inotifywait childs"
-    run
+    echo "Ok"
+    echo "Starting inotifaction daemon"
+    daemonize
     echo "Ok"
 }
 
 stop() {
-    exitIfDaemonIs $DAEMONSTATE_inactive
-
     # This is safe because either the pid is taken by the inotifaction daemon
     # or by nothing since the only unsafe case would be:
     #
@@ -44,20 +47,30 @@ stop() {
     #
     # We are safe :)
 
+    # Getting the pid before make sure the pid is not changed after calling
+    # isDaemonActive, thus making this program able to kill other process
     daemon_pid=$(cat $SAVE_PID_DIR)
+    exitIfDaemonIs $DAEMONSTATE_inactive $daemon_pid
     kill $daemon_pid 
 }
 
+# Can be called as:
+# exitIfDaemonIs DAEMONSTATE
+# exitIfDaemonIs DAEMONSTATE pid
 exitIfDaemonIs() {
-    isDaemonActive
+    daemon_pid="${2:-$(cat $SAVE_PID_DIR)}"
+    isDaemonActive $daemon_pid
     if [ $? = $1 ]; then
         status
         exit 0
     fi
 }
 
+# Can be called as:
+# isDaemonActive
+# isDaemonActive pid
 isDaemonActive() {
-    daemon_pid=$(cat $SAVE_PID_DIR)
+    daemon_pid="${1:-$(cat $SAVE_PID_DIR)}"
     daemon_pid_name=$(ps -p $daemon_pid -o comm=) 
     if [ "$DAEMON_PID_NAME" = "$0" ]; then
         return $DAEMONSTATE_active
@@ -74,22 +87,32 @@ status() {
     esac
 }
 
-case "${1}" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        start
-        ;;
-    status)
-        status
-        ;;
-    *)
-        echo "Usage: ${0} {start|stop|restart|status}"
-        exit 1
-esac
+if [ "$1" = "DAEMON" ]; then
+    trap '' INT
+    shift # Shift args to the left
+    
+    ### Daemonized section ###
+    inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
+    ### End of daemonized section ###
 
+    exit 0
+else
+    case "${1}" in
+        start)
+            start
+            ;;
+        stop)
+            stop
+            ;;
+        restart)
+            stop
+            start
+            ;;
+        status)
+            status
+            ;;
+        *)
+            echo "Usage: ${0} {start|stop|restart|status}"
+            exit 1
+    esac
+fi
