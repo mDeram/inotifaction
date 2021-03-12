@@ -14,12 +14,13 @@ CONFIG_DIR=$HOME/.config/inotifaction/config
 SCRIPT=./scripts/relocator
 
 WATCH=$HOME/Pictures/screenshots
+#WATCH2=$HOME/Pictures/bg
 
 daemonize() {
     export PATH=$PWD:$PATH
     cd /
     #umask 022 do we want a umask here ? I don't think so
-    nohup setsid $0 DAEMON $* 2>$SAVE_ERR_DIR >$SAVE_LOG_DIR & jobs -p > $SAVE_PID_DIR
+    nohup setsid $0 DAEMON $* 2>$SAVE_ERR_DIR >$SAVE_LOG_DIR & echo "$!" > $SAVE_PID_DIR
 }
 
 start() {
@@ -62,7 +63,9 @@ stop() {
         echo "Currently inactive"
         return 1
     fi
-    kill $daemon_pid 
+
+    #kills the daemon with its childs processes
+    kill -9 -"$daemon_pid"
     echo "Daemon killed"
 }
 
@@ -93,13 +96,20 @@ status() {
 }
 
 if [ "$1" = "DAEMON" ]; then
+    # Cannot die on ctrl+c
     trap '' INT
-    shift # Shift args to the left
+    #trap 'cleanupFunction; exit 0' TERM
+    # Shift args to the left
+    shift 
     
     ### Daemonized section ###
+
     inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
-    wait
+    echo $! > $SAVE_LOG_DIR
+    #inotifywait -m -e close_write ${WATCH2} | xargs -n3 ${SCRIPT} &
+
     ### End of daemonized section ###
+    wait
 
     exit 0
 else
