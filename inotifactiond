@@ -6,21 +6,18 @@ DAEMONSTATE_active=1
 DAEMONSTATE_inactive=0
 
 SAVE_DIR=$HOME/.inotifaction
-SAVE_LOG_DIR=$SAVE_DIR/log
-SAVE_PID_DIR=$SAVE_DIR/pid
-SAVE_ERR_DIR=$SAVE_DIR/err # or /dev/null
+SAVE_LOG=$SAVE_DIR/log
+SAVE_PID=$SAVE_DIR/pid
+SAVE_ERR=$SAVE_DIR/err # or /dev/null
 
-CONFIG_DIR=$HOME/.config/inotifaction/config
-SCRIPT=./scripts/relocator
-
-WATCH=$HOME/Pictures/screenshots
-#WATCH2=$HOME/Pictures/bg
+CONFIG=$HOME/.config/inotifaction/config
+SCRIPT_DIR=$HOME/.inotifaction/scripts
 
 daemonize() {
     export PATH=$PWD:$PATH
     cd /
-    #umask 022 do we want a umask here ? I don't think so
-    nohup setsid $0 DAEMON $* 2>$SAVE_ERR_DIR >$SAVE_LOG_DIR & echo "$!" > $SAVE_PID_DIR
+    #umask 022 do we need a umask here ? I don't think so
+    nohup setsid $0 DAEMON $* 2>$SAVE_ERR >$SAVE_LOG & echo "$!" > $SAVE_PID
 }
 
 start() {
@@ -51,20 +48,20 @@ stop() {
     # The pid correspond to the inotifaction daemon, then its killed, then
     # another program take that pid which is impossible since pids are
     # incremental so the system would need a restart thus killing that script.
-    # So that unsafe case isn't possible.
+    # So this unsafe case isn't possible.
     #
     # We are safe :)
 
     # Getting the pid before make sure the pid is not changed after calling
     # getDaemonStatus, thus preventing this program to kill other process
-    daemon_pid=$(cat $SAVE_PID_DIR)
+    daemon_pid=$(cat $SAVE_PID)
     getDaemonStatus $daemon_pid
     if [ "$?" = "$DAEMONSTATE_inactive" ]; then
         echo "Currently inactive"
         return 1
     fi
 
-    #kills the daemon with its childs processes
+    # Kills the daemon with its childs processes
     kill -9 -"$daemon_pid"
     echo "Daemon killed"
 }
@@ -72,7 +69,7 @@ stop() {
 # getDaemonStatus [pid]
 getDaemonStatus() {
     # Get the pid from params or from the pid file
-    daemon_pid="${1:-$(cat $SAVE_PID_DIR)}"
+    daemon_pid="${1:-$(cat $SAVE_PID)}"
     # Check pid not empty
     if [ "$daemon_pid" = "" ]; then
         return $DAEMONSTATE_inactive
@@ -95,6 +92,26 @@ status() {
     esac
 }
 
+parse() {
+    # Is a comment?
+    if [ "$(echo $line | cut -c1)" = '#' ]; then
+        return 0
+    fi
+
+    script=$(echo $line | cut -d';' -f1)
+    args=$(echo $line | cut -d';' -f2)
+    dir=$(echo $line | cut -d';' -f3)
+
+    # Is format invalid?
+    if [ -z "$script" -o -z "$dir" ]; then
+        return 0
+    fi
+
+    # Echo to the log file
+    echo "$script $args $dir"
+    inotifywait ${args} ${dir} | xargs -n3 ${SCRIPT_DIR}/${script} &
+}
+
 if [ "$1" = "DAEMON" ]; then
     # Cannot die on ctrl+c
     trap '' INT
@@ -104,9 +121,9 @@ if [ "$1" = "DAEMON" ]; then
     
     ### Daemonized section ###
 
-    inotifywait -m -e close_write ${WATCH} | xargs -n3 ${SCRIPT} &
-    echo $! > $SAVE_LOG_DIR
-    #inotifywait -m -e close_write ${WATCH2} | xargs -n3 ${SCRIPT} &
+    while read -r line; do
+        parse $line
+    done < $CONFIG
 
     ### End of daemonized section ###
     wait
