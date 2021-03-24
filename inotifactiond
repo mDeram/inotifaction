@@ -109,7 +109,7 @@ parse() {
 
     # Echo to the log file
     echo "$script $args $dir"
-    inotifywait ${args} ${dir} | xargs -n3 ${SCRIPT_DIR}/${script} &
+    inotifywait ${args} ${dir} | xargs -I{} ${SCRIPT_DIR}/${script} {} &
 }
 
 if [ "$1" = "DAEMON" ]; then
