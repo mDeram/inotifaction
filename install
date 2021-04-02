@@ -1,19 +1,31 @@
 #!/bin/sh
 
-SAVE_DIR=$HOME/.relocator 
-SAVE_LOG_FILE=$SAVE_DIR/relocator.log
-SAVE_PID_FILE=$SAVE_DIR/relocator.pid
+SAVE_DIR=$HOME/.inotifaction 
+SAVE_LOG=$SAVE_DIR/log
+SAVE_PID=$SAVE_DIR/pid
+SAVE_ERR=$SAVE_DIR/err
+SAVE_SCRIPT_DIR=$SAVE_DIR/scripts
+
+CONFIG_DIR=$HOME/.config/inotifaction
+CONFIG=$CONFIG_DIR/config
+
 SAVE_BIN_DIR=$HOME/.local/bin
 
-CONFIG_DIR=$HOME/.config/relocator
+# Install
+chmod u+x inotifactiond
+cp inotifactiond "$SAVE_BIN_DIR"
+# Add that dir to $PATH
 
-rm -r .git
-chmod u+x relocator relocator_daemon
-mv relocator ${SAVE_BIN_DIR}
-mv relocator_daemon ${SAVE_BIN_DIR}
-mv ${PWD} ${SAVE_DIR}
-touch ${SAVE_LOG_FILE}
-touch ${SAVE_PID_FILE}
+mkdir "$CONFIG_DIR"
+cp config "$CONFIG_DIR"
+touch "$CONFIG"
 
-mkdir ${CONFIG_DIR}
-touch ${CONFIG_DIR}/config
+mkdir "$SAVE_DIR"
+cp LICENSE README.md "$SAVE_DIR"
+cp -r scripts "$SAVE_SCRIPT_DIR"
+touch "$SAVE_LOG" "$SAVE_PID" "$SAVE_ERR"
+
+# Clean
+if [ "$1" = "-c" ]; then
+    rm -rf "$PWD"
+fi
