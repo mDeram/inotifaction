@@ -14,10 +14,10 @@ CONFIG=$HOME/.config/inotifaction/config
 SCRIPT_DIR=$HOME/.inotifaction/scripts
 
 daemonize() {
-    export PATH=$PWD:$PATH
+    export PATH="$PWD:$PATH"
     cd /
     #umask 022 do we need a umask here ? I don't think so
-    nohup setsid $0 DAEMON $* 2>$SAVE_ERR >$SAVE_LOG & echo "$!" > $SAVE_PID
+    nohup setsid $0 DAEMON $* 2>"$SAVE_ERR" >"$SAVE_LOG" & echo "$!" > "$SAVE_PID"
 }
 
 start() {
@@ -30,8 +30,8 @@ start() {
     echo "Checking if the save directory exists"
     mkdir -p -- "$SAVE_DIR"
     if [ ! -d "$SAVE_DIR" ]; then
-        echo "Missing directory ${SAVE_DIR} & cannot be created"
-        echo "Try 'mkdir ${SAVE_DIR}' or run the install file" 
+        echo "Missing directory $SAVE_DIR & cannot be created"
+        echo "Try 'mkdir $SAVE_DIR' or run the install file" 
         exit 1
     fi
     echo "Ok"
@@ -54,8 +54,8 @@ stop() {
 
     # Getting the pid before make sure the pid is not changed after calling
     # getDaemonStatus, thus preventing this program to kill other process
-    daemon_pid=$(cat $SAVE_PID)
-    getDaemonStatus $daemon_pid
+    daemon_pid=$(cat "$SAVE_PID")
+    getDaemonStatus "$daemon_pid"
     if [ "$?" = "$DAEMONSTATE_inactive" ]; then
         echo "Currently inactive"
         return 1
@@ -69,14 +69,13 @@ stop() {
 # getDaemonStatus [pid]
 getDaemonStatus() {
     # Get the pid from params or from the pid file
-    daemon_pid="${1:-$(cat $SAVE_PID)}"
+    daemon_pid="${1:-$(cat "$SAVE_PID")}"
     # Check pid not empty
     if [ "$daemon_pid" = "" ]; then
         return $DAEMONSTATE_inactive
     fi
 
-    daemon_pid_name=$(ps -p $daemon_pid -o comm=) 
-    #if [ "$daemon_pid_name" = "$0" ]; then
+    daemon_pid_name=$(ps -p "$daemon_pid" -o comm=) 
     if [ "$daemon_pid_name" = "$DAEMON_NAME" ]; then
         return $DAEMONSTATE_active
     else
@@ -109,9 +108,10 @@ parse_and_exec() {
     fi
 
     # Echo to the log file
-    echo "$script $args $dir"
-    inotifywait ${args} ${dir} | while IFS= read line; do
+    echo "Script: $script Args: $args Dir: $dir"
+    inotifywait $args "$dir" | while IFS= read line; do
         # TODO simplify
+        # TODO case where directory contains space
         arg_dir=$(echo $line | cut -d' ' -f1)
         arg_event=$(echo $line | cut -d' ' -f2)
         size=$((${#arg_dir}+${#arg_event}+3))
@@ -119,7 +119,7 @@ parse_and_exec() {
         arg_filename=$(echo $line | cut -c$size-)
 
         # Finally calling the script to execute
-        ${SCRIPT_DIR}/${script} $arg_dir $arg_event "$arg_filename"
+        "$SCRIPT_DIR/$script" "$arg_dir" "$arg_event" "$arg_filename"
     done &
 }
 
@@ -133,15 +133,15 @@ if [ "$1" = "DAEMON" ]; then
     ### Daemonized section ###
 
     while read -r line; do
-        parse_and_exec $line
-    done < $CONFIG
+        parse_and_exec "$line"
+    done < "$CONFIG"
 
     ### End of daemonized section ###
     wait
 
     exit 0
 else
-    case "${1}" in
+    case "$1" in
         start)
             start
             ;;
@@ -156,7 +156,7 @@ else
             status
             ;;
         *)
-            echo "Usage: ${0} {start|stop|restart|status}"
+            echo "Usage: ${DAEMON_NAME} {start|stop|restart|status}"
             exit 1
     esac
 fi
