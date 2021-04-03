@@ -109,17 +109,14 @@ parse_and_exec() {
 
     # Echo to the log file
     echo "Script: $script Args: $args Dir: $dir"
-    inotifywait $args "$dir" | while IFS= read line; do
+    inotifywait --format "%w,%;e,%f" $args "$dir" | while IFS= read line; do
         # TODO simplify
-        # TODO case where directory contains space
-        arg_dir=$(echo $line | cut -d' ' -f1)
-        arg_event=$(echo $line | cut -d' ' -f2)
-        size=$((${#arg_dir}+${#arg_event}+3))
-        # Getting the last part of the line
-        arg_filename=$(echo $line | cut -c$size-)
+        arg_dir=$(echo $line | cut -d',' -f1)
+        arg_event=$(echo $line | cut -d',' -f2)
+        arg_filename=$(echo $line | cut -d',' -f3)
 
         # Finally calling the script to execute
-        "$SCRIPT_DIR/$script" "$arg_dir" "$arg_event" "$arg_filename"
+        "$SCRIPT_DIR/$script" "$line" "$arg_dir" "$arg_event" "$arg_filename"
     done &
 }
 
