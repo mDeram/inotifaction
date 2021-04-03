@@ -16,7 +16,6 @@ SCRIPT_DIR=$HOME/.inotifaction/scripts
 daemonize() {
     export PATH="$PWD:$PATH"
     cd /
-    #umask 022 do we need a umask here ? I don't think so
     nohup setsid $0 DAEMON $* 2>"$SAVE_ERR" >"$SAVE_LOG" & echo "$!" > "$SAVE_PID"
 }
 
@@ -45,10 +44,10 @@ stop() {
     # This is safe because either the pid is taken by the inotifaction daemon
     # or by nothing since the only unsafe case would be:
     #
-    # The pid correspond to the inotifaction daemon, then its killed, then
-    # another program take that pid which is impossible since pids are
+    # The pid correspond to the inotifaction daemon process, then it's killed,
+    # then another program take that pid which is impossible since pids are
     # incremental so the system would need a restart thus killing that script.
-    # So this unsafe case isn't possible.
+    # So that unsafe case isn't possible.
     #
     # We are safe :)
 
@@ -68,8 +67,9 @@ stop() {
 
 # getDaemonStatus [pid]
 getDaemonStatus() {
-    # Get the pid from params or from the pid file
+    # Try to get the pid from the first argument then from the pid file
     daemon_pid="${1:-$(cat "$SAVE_PID")}"
+
     # Check pid not empty
     if [ "$daemon_pid" = "" ]; then
         return $DAEMONSTATE_inactive
@@ -97,7 +97,6 @@ parse_and_exec() {
         return 0
     fi
 
-    # TODO simplify
     script=$(echo $line | cut -d';' -f1)
     args=$(echo $line | cut -d';' -f2)
     dir=$(echo $line | cut -d';' -f3)
@@ -109,8 +108,9 @@ parse_and_exec() {
 
     # Echo to the log file
     echo "Script: $script Args: $args Dir: $dir"
+
     inotifywait --format "%w,%;e,%f" $args "$dir" | while IFS= read line; do
-        # TODO simplify
+
         arg_dir=$(echo $line | cut -d',' -f1)
         arg_event=$(echo $line | cut -d',' -f2)
         arg_filename=$(echo $line | cut -d',' -f3)
@@ -123,7 +123,7 @@ parse_and_exec() {
 if [ "$1" = "DAEMON" ]; then
     # Cannot die on ctrl+c
     trap '' INT
-    #trap 'cleanupFunction; exit 0' TERM
+
     # Shift args to the left
     shift 
     
